@@ -1,0 +1,25 @@
+server:
+  port: 7777
+indexing-settings:
+  sites:
+    - url: https://ntcore.com
+      name: NTCore.com
+    - url: https://tour-360.ru
+      name: Borodin
+    - url: http://www.playback.ru
+      name: Playback.ru
+web-request:
+  user-agent: VMSSearchBot
+  referrer: http://google.com
+spring:
+  datasource:
+    username: root
+    password: root
+    url: jdbc:mysql://localhost:3306/search_engine?useSSL=false&requireSSL=false&allowPublicKeyRetrieval=true
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
