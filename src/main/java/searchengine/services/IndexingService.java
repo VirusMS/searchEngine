@@ -6,11 +6,18 @@ import org.springframework.stereotype.Service;
 import searchengine.config.JsoupRequestConfig;
 import searchengine.config.SiteShort;
 import searchengine.config.SitesList;
+import searchengine.entity.Lemma;
+import searchengine.entity.Page;
 import searchengine.entity.Site;
 import searchengine.entity.SiteStatus;
-import searchengine.mapper.WebPage;
-import searchengine.mapper.WebSiteMapper;
+import searchengine.mapper.WebsiteIndexMapper;
+import searchengine.mapper.assets.IndexTask;
+import searchengine.mapper.assets.WebPage;
+import searchengine.mapper.WebsiteMapper;
+import searchengine.repository.LemmaRepository;
+import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
+import searchengine.utils.SqlUtils;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -20,7 +27,8 @@ import java.util.concurrent.ForkJoinPool;
 @RequiredArgsConstructor
 public class IndexingService {
 
-    private static final int MAX_SQL_BATCH_SIZE = 5;
+    private static final int MAX_PAGE_SQL_BATCH_SIZE = 5;
+    private static final int MAX_NON_PAGE_SQL_BATCH_SIZE = 100;
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     private final SitesList siteList;
@@ -29,17 +37,20 @@ public class IndexingService {
 
     private final SiteRepository siteRepository;
 
+    private final LemmaRepository lemmaRepository;
+
+    private final PageRepository pageRepository;
+
     private final JdbcTemplate jdbcTemplate;
 
     private ForkJoinPool taskPool = new ForkJoinPool();
 
-    private Map<String, WebSiteMapper> taskList = new HashMap<>();
+    private Map<String, WebsiteMapper> websiteMapperTaskList = new HashMap<>();
+
+    //private Map<String, WebsiteIndexMapper> websiteIndexMapperTaskList = new HashMap<>();
 
     public void startIndexing() {
         //ATTN: make sure to verify whether the website in settings contains the last slash or not. IT MUST NOT CONTAIN LAST SLASH OR ERROR
-
-        //5. по завершении обхода изменять статус (поле status) на INDEXED;
-        //6. если произошла ошибка и обход завершить не удалось, изменять статус на FAILED и вносить в поле last_error понятную информацию о произошедшей ошибке.
 
         //1. удалять все имеющиеся данные по этому сайту (записи из таблиц site и page);
         buildAndExecuteCleanupQueries();
@@ -50,49 +61,11 @@ public class IndexingService {
         //3. обходить все страницы, начиная с главной, добавлять их адреса, статусы и содержимое в базу данных в таблицу page;
         //4. в процессе обхода постоянно обновлять дату и время в поле status_time таблицы site на текущее;
         //Map<String, WebPage> pageList = new HashMap<>();
-
-        for (String url : siteList.getUrlList()) {
-            for (Site site : siteRepository.findAll()) {
-                if (site.getUrl().equals(url)) {
-                    Integer siteId = site.getId();
-                    WebSiteMapper task = new WebSiteMapper(url, siteId, requestConfig);
-                    taskList.put(url, task);
-                    taskPool.invoke(task);
-                    //pages.put(url, taskPool.invoke(new WebSiteMapper(url, siteId, requestConfig)));
-                }
-            }
-        }
-
-        for (Map.Entry<String, WebSiteMapper> entry : taskList.entrySet()) {
-            WebPage page = entry.getValue().join();
-            createIndexedPageEntries(page, entry.getKey());
-
-            String sql = "UPDATE site SET status = 'INDEXED', status_time = '"
-                    + dateFormat.format(System.currentTimeMillis()) + "' WHERE id = " + page.getPageId();
-            jdbcTemplate.execute(sql);
-        }
-        /*System.out.println("DEBUG: initiating shutdown...");
-        taskPool.shutdown();
-        try {
-            taskPool.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-            System.out.println("DEBUG: shutdown done");
-            for (Map.Entry<String, WebPage> entry : pages.entrySet()) {
-                String url = entry.getKey();
-                WebPage page = entry.getValue();
-                createIndexedPageEntries(page, url);
-                String sql = "UPDATE site SET status = 'INDEXED', statusTime = "
-                        + dateFormat.format(System.currentTimeMillis() + " WHERE id = " + page.getPageId());
-                jdbcTemplate.execute(sql);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }*/
-
-        System.out.println("DEBUG: Indexing done!");
+        indexPages();
     }
 
     public void stopIndexing() {
-        for (Map.Entry<String, WebSiteMapper> entry : taskList.entrySet()) {
+        for (Map.Entry<String, WebsiteMapper> entry : websiteMapperTaskList.entrySet()) {
             Optional<Site> siteInDb = siteRepository.findByUrl(entry.getKey());
             int siteId = siteInDb.isPresent() ? siteInDb.get().getId() : -1;
 
@@ -102,9 +75,36 @@ public class IndexingService {
             jdbcTemplate.execute(sql);
         }
 
-        taskList = new HashMap<>();
+        websiteMapperTaskList = new HashMap<>();
+        //websiteIndexMapperTaskList = new HashMap<>();
         taskPool.shutdownNow();
         taskPool = new ForkJoinPool();
+    }
+
+    private void indexPages() {
+        for (String url : siteList.getUrlList()) {
+            for (Site site : siteRepository.findAll()) {
+                if (site.getUrl().equals(url)) {
+                    Integer siteId = site.getId();
+                    WebsiteMapper task = new WebsiteMapper(url, siteId, requestConfig);
+                    websiteMapperTaskList.put(url, task);
+                    taskPool.invoke(task);
+                    //pages.put(url, taskPool.invoke(new WebSiteMapper(url, siteId, requestConfig)));
+                }
+            }
+        }
+
+        //5. по завершении обхода изменять статус (поле status) на INDEXED;
+        for (Map.Entry<String, WebsiteMapper> entry : websiteMapperTaskList.entrySet()) {
+            WebPage page = entry.getValue().join();
+            createIndexedPagesAndLemmasEntries(page, entry.getKey());
+
+            String sql = "UPDATE site SET status = 'INDEXED', status_time = '"
+                    + dateFormat.format(System.currentTimeMillis()) + "' WHERE id = " + page.getPageId();
+            jdbcTemplate.execute(sql);
+        }
+        //6. если произошла ошибка и обход завершить не удалось, изменять статус на FAILED и вносить в поле last_error понятную информацию о произошедшей ошибке.
+        System.out.println("DEBUG: Indexing done!");
     }
 
     private void buildAndExecuteCleanupQueries() {
@@ -113,7 +113,7 @@ public class IndexingService {
         int siteCount = toRemove.size();
 
         StringBuilder siteSql = new StringBuilder();
-        StringBuilder pageSql = new StringBuilder();
+        StringBuilder pageAndLemmaSql = new StringBuilder();
 
         for (SiteShort site : toRemove) {
             String url = site.getUrl();
@@ -123,11 +123,11 @@ public class IndexingService {
             int siteId = siteInDb.isPresent() ? siteInDb.get().getId() : -1;
 
             if (siteId != -1) {
-                pageSql.append("site_id LIKE ").append(siteId);
+                pageAndLemmaSql.append("site_id LIKE ").append(siteId);
                 if (siteCount > 0) {
-                    pageSql.append(" OR ");
+                    pageAndLemmaSql.append(" OR ");
                 } else {
-                    pageSql.append(")");
+                    pageAndLemmaSql.append(")");
                 }
 
                 siteSql.append("url LIKE '").append(url);
@@ -136,16 +136,18 @@ public class IndexingService {
                 } else {
                     siteSql.append("')");
                 }
+
                 siteCount--;
             }
         }
 
-        if (!pageSql.isEmpty()) { //Both pageSql and siteSql will be empty if none were found, doesn't matter which 1 to check on
-            if (pageSql.substring(pageSql.length() - 4, pageSql.length()).equals(" OR ")) {
-                pageSql = new StringBuilder(pageSql.substring(0, pageSql.length() - 4)).append(")");
+        if (!pageAndLemmaSql.isEmpty()) { //Both pageSql and siteSql will be empty if none were found, doesn't matter which 1 to check on
+            if (pageAndLemmaSql.substring(pageAndLemmaSql.length() - 4, pageAndLemmaSql.length()).equals(" OR ")) {
+                pageAndLemmaSql = new StringBuilder(pageAndLemmaSql.substring(0, pageAndLemmaSql.length() - 4)).append(")");
                 siteSql = new StringBuilder(siteSql.substring(0, siteSql.length() - 4)).append(")");
             }
-            jdbcTemplate.execute("DELETE FROM page WHERE (" + pageSql);
+            jdbcTemplate.execute("DELETE FROM lemma WHERE (" + pageAndLemmaSql);
+            jdbcTemplate.execute("DELETE FROM page WHERE (" + pageAndLemmaSql);
             jdbcTemplate.execute("DELETE FROM site WHERE (" + siteSql);
         }
 
@@ -166,35 +168,84 @@ public class IndexingService {
         jdbcTemplate.execute(sql.toString());
     }
 
-    private void createIndexedPageEntries(WebPage startPage, String baseUrl) {
+    private void createIndexedPagesAndLemmasEntries(WebPage startPage, String baseUrl) {
 
         Map<String, WebPage> pageList = startPage.getFlatUrlList();
-        StringBuilder sql = new StringBuilder();
-        int count = 0;
+        StringBuilder pageSql = new StringBuilder();
+        StringBuilder lemmaSql = new StringBuilder();
+        int pageCount = 0;
+        int lemmaCount = 0;
+        int startPageId = startPage.getPageId();
 
-        for (Map.Entry<String, WebPage> entry : pageList.entrySet()) {
+        for (Map.Entry<String, WebPage> webpageEntry : pageList.entrySet()) {
 
-            WebPage webpage = entry.getValue();
+            WebPage webpage = webpageEntry.getValue();
+            if (!webpage.isDefinedCorrectly()) {    //This is a fail safe for now. Reasonably, we need to parse errors that cause this
+                System.out.println("DEBUG (createIndexedPagesAndLemmasEntries): incorrect page is below\n" + webpage);
+                continue;
+            }
+            Integer pageId = webpage.getPageId();
 
-            sql.append(sql.isEmpty() ? " " : ", ")
-                    .append("('").append(webpage.getPageId()).append("', '").append(entry.getKey().replace(baseUrl, ""))
-                    .append("', '").append(webpage.getStatusCode()).append("', '").append(webpage.getContent().replace('\'', ' ')).append("')")
+            String webpageUrl = webpageEntry.getKey();
+            pageSql.append(pageSql.isEmpty() ? " " : ", ")
+                    .append("('").append(pageId).append("', '")
+                    .append(webpageUrl.equals(baseUrl) ? "/" : webpageUrl.replace(baseUrl, ""))
+                    .append("', '").append(webpage.getStatusCode()).append("', '")
+                    .append(webpage.getContent() == null ? ' ' : webpage.getContent().replace('\'', ' '))
+                    .append("')")
                     .toString().replace('\n', ' ');
 
-            if (++count >= MAX_SQL_BATCH_SIZE && !sql.isEmpty()) {
-                System.out.println("DEBUG: current SQL request: \n" + "INSERT INTO page(site_id, path, code, content) VALUES" + sql);
-                jdbcTemplate.execute("INSERT INTO page(site_id, path, code, content) VALUES" + sql);
+            if (SqlUtils.sendBatchRequest(jdbcTemplate, pageCount, MAX_PAGE_SQL_BATCH_SIZE, "INSERT INTO page(site_id, path, code, content) VALUES",
+                                pageSql, startPageId)) {
+                pageSql = new StringBuilder();
+                pageCount = 0;
+            } else {
+                pageCount++;
+            }
 
-                String updateSql = "UPDATE site SET status_time = '"
-                        + dateFormat.format(System.currentTimeMillis()) + "' WHERE id = " + startPage.getPageId();
-                jdbcTemplate.execute(updateSql);
-                sql = new StringBuilder();
-                count = 0;
+            Map<String, Integer> lemmaFrequencies = webpage.getLemmasFrequencyList();
+            for (Map.Entry<String, Integer> lemmaEntry : lemmaFrequencies.entrySet() ) {
+                lemmaSql.append(lemmaSql.isEmpty() ? " " : ", ")
+                        .append("('").append(pageId).append("', '")
+                        .append(lemmaEntry.getKey()).append("', '")
+                        .append(lemmaEntry.getValue()).append("')");
+
+                if (SqlUtils.sendBatchRequest(jdbcTemplate, lemmaCount, MAX_NON_PAGE_SQL_BATCH_SIZE, "INSERT INTO lemma(site_id, lemma, frequency) VALUES",
+                                    lemmaSql, startPageId)) {
+                    lemmaSql = new StringBuilder();
+                    lemmaCount = 0;
+                } else {
+                    lemmaCount++;
+                }
             }
         }
 
-        if (!sql.isEmpty()) {
-            jdbcTemplate.execute("INSERT INTO page(site_id, path, code, content) VALUES" + sql);
+        SqlUtils.sendLastRequest(jdbcTemplate,"INSERT INTO page(site_id, path, code, content) VALUES", pageSql.toString());
+        SqlUtils.sendLastRequest(jdbcTemplate, "INSERT INTO lemma(site_id, lemma, frequency) VALUES", lemmaSql.toString());
+
+        createIndexEntries(startPage, baseUrl); //This must be done AFTER all lemmas are added
+    }
+
+    private void createIndexEntries(WebPage startPage, String baseUrl) {
+        Map<String, WebPage> pageList = startPage.getFlatUrlList();
+        Integer siteId = startPage.getPageId();
+
+        Site site = siteRepository.findById(siteId).orElse(null);//Site should not be null here, may need extra check.
+        List<Lemma> lemmas = lemmaRepository.findAllBySite(site);
+        List<Page> pages = pageRepository.findAllBySite(site);
+
+        for (WebPage webpage : pageList.values()) {
+            WebsiteIndexMapper task = new WebsiteIndexMapper(jdbcTemplate, new IndexTask(
+                    MAX_NON_PAGE_SQL_BATCH_SIZE,
+                    webpage,
+                    siteId,
+                    baseUrl,
+                    lemmas,
+                    pages
+            ));
+
+            //websiteIndexMapperTaskList.put(webpage.getUrl(), task);
+            taskPool.invoke(task);
         }
     }
 

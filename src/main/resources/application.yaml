@@ -2,12 +2,8 @@ server:
   port: 7777
 indexing-settings:
   sites:
-    - url: https://ntcore.com
-      name: NTCore.com
-    - url: https://tour-360.ru
-      name: Borodin
-    - url: http://www.playback.ru
-      name: Playback.ru
+  - url: http://www.playback.ru
+    name: Плэйбэк ру
 web-request:
   user-agent: VMSSearchBot
   referrer: http://google.com

@@ -8,7 +8,7 @@ import searchengine.entity.Site;
 import java.util.Optional;
 
 @Repository
-public interface SiteRepository extends JpaRepository<Site, Long> {
+public interface SiteRepository extends JpaRepository<Site, Integer> {
 
     default Optional<Site> findByUrl(String url) {
         return findOne(Example.of(new Site(null, null, null, null, url, null)));

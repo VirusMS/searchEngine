@@ -1,4 +1,4 @@
-package searchengine.mapper;
+package searchengine.mapper.assets;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -17,6 +17,7 @@ public class WebPage {
     private Integer pageId;
     private Integer statusCode;
     private String content;
+    private HashMap<String, Integer> lemmas;
 
     public WebPage(String url, Integer pageId) {
         this.url = url;
@@ -82,6 +83,36 @@ public class WebPage {
         }
 
         return result;
+    }
+
+    public Map<String, Integer> getLemmasFrequencyList() {
+        Map<String, WebPage> flatUrlList = getFlatUrlList();
+        Map<String, Integer> result = new HashMap<>();
+
+        for (WebPage webpage : flatUrlList.values()) {
+            for (String lemma : lemmas.keySet()) {
+                if (result.containsKey(lemma)) {
+                    result.put(lemma, result.get(lemma) + 1);
+                } else {
+                    result.put(lemma, 1);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder result = new StringBuilder();
+        result.append("url = ").append(url).append("; parentUrl = ").append(parentUrl).append("; pageId = ").append(pageId)
+                .append("; statusCode = ").append(statusCode).append(";\nlemmas = ").append(lemmas)
+                .append(";\ncontent = ").append(content);
+        return result.toString();
+        }
+
+    public boolean isDefinedCorrectly() {
+        return !(lemmas == null || content == null || statusCode == null);
     }
 
     private Map<String, WebPage> getFlatUrlList(Map<String, WebPage> previousList) {
