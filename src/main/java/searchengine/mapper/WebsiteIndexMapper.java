@@ -45,8 +45,11 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
                 String lemmaToFind = lemma.getLemma();
                 if (pageLemmas.containsKey(lemmaToFind)) {
 
+                    String path = webpage.getUrl();
+                    String baseUrl = indexTask.getBaseUrl();
+                    path = path.equals(baseUrl) ? "/" : path.replace(baseUrl, "");
 
-                    Page page = findPageByUrl(indexTask.getPages(), webpage.getUrl().replace(indexTask.getBaseUrl(), ""));
+                    Page page = findPageByUrl(indexTask.getPages(), path);
                     sql.append(sql.isEmpty() ? " " : ", ")
                             .append("('").append(page.getId()).append("', '").append(lemma.getId())
                             .append("', '").append(webpage.getLemmas().get(lemmaToFind))
@@ -54,13 +57,15 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
                 }
                 if (SqlUtils.sendBatchRequest(jdbcTemplate, count, indexTask.getMaxSqlBatchSize(),
                         "INSERT INTO website_index(page_id, lemma_id, lemma_rank) VALUES", sql, indexTask.getSiteId())) {
+                    System.out.println("DEBUG (WebsiteIndexMapper): batch request sent, table 'website_index'");
                     sql = new StringBuilder();
                     count = 0;
                 } else {
                     count++;
                 }
             }
-            SqlUtils.sendLastRequest(jdbcTemplate, "INSERT INTO website_index(page_id, lemma_id, lemma_rank) VALUES", sql.toString());
+            SqlUtils.sendLastRequest(jdbcTemplate, "INSERT INTO website_index(page_id, lemma_id, lemma_rank) VALUES", sql);
+            System.out.println("DEBUG (WebsiteIndexMapper): last batch request sent, table 'website_index'");
         return true;
     }
 

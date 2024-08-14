@@ -24,7 +24,11 @@ public class SqlUtils {
         return false;
     }
 
-    public static void sendLastRequest(JdbcTemplate jdbcTemplate, String command, String values) {
+    public static void sendLastRequest(JdbcTemplate jdbcTemplate, String command, StringBuilder values) {
+        sendLastRequest(jdbcTemplate, command, values.toString());
+    }
+
+    private static void sendLastRequest(JdbcTemplate jdbcTemplate, String command, String values) {
         if (!values.isEmpty()) {
             jdbcTemplate.execute(command + values);
         }

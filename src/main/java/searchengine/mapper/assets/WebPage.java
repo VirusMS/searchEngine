@@ -3,10 +3,7 @@ package searchengine.mapper.assets;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Getter
 @Setter
@@ -37,7 +34,9 @@ public class WebPage {
     }
 
     public void addUrlToList(WebPage webpage) {
-        urlList.put(webpage.getUrl(), webpage);
+        if (!webpage.equals(null)) {    //null webpage is returned in some cases, these ought to be ignored
+            urlList.put(webpage.getUrl(), webpage);
+        }
     }
 
     public String getOriginalLink() {
@@ -55,7 +54,8 @@ public class WebPage {
     }
 
     public boolean hasLink(String url) {
-        return getOriginalWebPage().hasLink(url, new ArrayList<>());
+        WebPage originalPage = getOriginalWebPage();
+        return originalPage.hasLink(url, new ArrayList<>());
     }
 
     public boolean equalsLeniently(String url1, String url2) {
@@ -90,6 +90,9 @@ public class WebPage {
         Map<String, Integer> result = new HashMap<>();
 
         for (WebPage webpage : flatUrlList.values()) {
+            if (webpage.equals(null)) {
+                continue;   //we skip null values
+            }
             for (String lemma : lemmas.keySet()) {
                 if (result.containsKey(lemma)) {
                     result.put(lemma, result.get(lemma) + 1);
@@ -102,17 +105,27 @@ public class WebPage {
         return result;
     }
 
-    @Override
+    /*@Override
     public String toString() {
         StringBuilder result = new StringBuilder();
         result.append("url = ").append(url).append("; parentUrl = ").append(parentUrl).append("; pageId = ").append(pageId)
                 .append("; statusCode = ").append(statusCode).append(";\nlemmas = ").append(lemmas)
                 .append(";\ncontent = ").append(content);
         return result.toString();
-        }
+    }*/
 
     public boolean isDefinedCorrectly() {
         return !(lemmas == null || content == null || statusCode == null);
+    }
+
+    public void clone(WebPage source) {
+        this.urlList = source.getUrlList();
+        this.url = source.getUrl();
+        this.parentUrl = source.getParentUrl();
+        this.pageId = source.getPageId();
+        this.statusCode = source.getStatusCode();
+        this.content = source.getContent();
+        this.lemmas = source.getLemmas();
     }
 
     private Map<String, WebPage> getFlatUrlList(Map<String, WebPage> previousList) {
@@ -138,7 +151,8 @@ public class WebPage {
         if (equalsLeniently(url, this.url)) {
             return true;
         }
-        for (WebPage webpage : urlList.values()) {
+        Collection<WebPage> thisUrlList = urlList.values();
+        for (WebPage webpage : thisUrlList) {
             if (containsLeniently(webpage.getUrl(), checkedUrls) || webpage.getUrl().equals(parentUrl)) {
                 continue;
             }

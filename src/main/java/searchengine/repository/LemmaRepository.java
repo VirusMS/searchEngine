@@ -14,4 +14,7 @@ public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
     @Query("SELECT l FROM Lemma l WHERE l.site = ?1")
     List<Lemma> findAllBySite(Site site);
 
+    @Query("SELECT l FROM Lemma l WHERE l.site = ?1 AND l.lemma IN ?2")
+    List<Lemma> findAllBySiteAndLemmaList(Site site, List<String> lemmas);
+
 }

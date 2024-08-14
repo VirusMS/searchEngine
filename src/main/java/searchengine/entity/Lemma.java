@@ -26,4 +26,5 @@ public class Lemma {
     @Column(nullable = false)
     private Integer frequency;
 
+
 }

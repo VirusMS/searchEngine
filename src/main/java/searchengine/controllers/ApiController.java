@@ -30,7 +30,7 @@ public class ApiController {
 
     @PostMapping("/indexPage")
     public IndexingResponse indexPage(@RequestParam String url) {
-        //if website is not within configurated websites, throw error. check api specifications.
+        //if website is not within configured websites, throw error. check api specifications.
         return apiService.indexPage(url);
     }
 
@@ -39,9 +39,17 @@ public class ApiController {
         return statisticsService.getStatistics();
     }
 
-    @GetMapping("/search")
+    /*@GetMapping("/search")
     public SearchResponse search(@RequestBody SearchRequest request) {
         return apiService.search(request);
+    }*/
+
+    @GetMapping("/search")
+    public SearchResponse search(@RequestParam String query,
+                                 @RequestParam(required = false) String site,
+                                 @RequestParam(defaultValue = "0") int offset,
+                                 @RequestParam(defaultValue = "20") int limit) {
+        return apiService.search(query, site, offset, limit);
     }
 
 }

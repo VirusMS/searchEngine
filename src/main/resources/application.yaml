@@ -3,7 +3,7 @@ server:
 indexing-settings:
   sites:
   - url: http://www.playback.ru
-    name: Плэйбэк ру
+    name: плэйбэк ру
 web-request:
   user-agent: VMSSearchBot
   referrer: http://google.com

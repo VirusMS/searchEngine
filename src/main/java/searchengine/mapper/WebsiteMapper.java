@@ -3,6 +3,7 @@ package searchengine.mapper;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
+
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -21,33 +22,39 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
 
     private final JsoupRequestConfig requestConfig;
 
+    private final WebpageMapper webpageMapper;
+
     public WebsiteMapper(String url, Integer pageId, JsoupRequestConfig requestConfig) {
         webpage = new WebPage(url, pageId);
         this.requestConfig = requestConfig;
+        webpageMapper = new WebpageMapper(requestConfig);
     }
 
     public WebsiteMapper(WebPage webpage, JsoupRequestConfig requestConfig) {
         this.webpage = webpage;
         this.requestConfig = requestConfig;
+        webpageMapper = new WebpageMapper(requestConfig);
     }
 
-
+    //  TODO: resolve java.net.SocketTimeoutException: Read timed out exceptions.
+    //  TODO: resolve java.net.ConnectException: Connection timed out: getsockopt - possible exception, prolly website thinks I am DDoS attacking them
+    //  TODO: handle cases when Connection.Response from WebpageMapper is null, if any
     @Override
     protected WebPage compute() {
         Map<String, WebsiteMapper> taskList = new HashMap<>();
         String originalLink = webpage.getOriginalLink();
+
         try {
-            Thread.sleep(250);
-            Connection.Response response = Jsoup.connect(webpage.getUrl())
-                    .header("Accept-Language", "ru")
-                    .userAgent(requestConfig.getUserAgent())
-                    .referrer(requestConfig.getReferrer())
-                    .followRedirects(false)
-                    .execute();
-            //java.net.ConnectException: Connection timed out: getsockopt - possible exception, prolly website thinks I am a DDoS guy
+
+            Connection.Response response = webpageMapper.getWebpageResponse(webpage.getUrl());
             Document doc = response.parse();
 
-            webpage.setStatusCode(response.statusCode());
+            if (response.statusCode() == 302) {
+                return null;
+            }
+
+            webpage.clone(webpageMapper.getWebpage(response, webpage));
+            /*webpage.setStatusCode(response.statusCode());
             String content = Jsoup.parse(doc.html()).wholeText() //We do not need tags, we only need page text to work with l8r
                     .replace('\n', ' ')
                     //.replaceAll("[^\\x20-\\x7e]", "") //Replacing non-ASCII chars.
@@ -56,9 +63,7 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
                 content = content.substring(1);
             }
             webpage.setContent(content);
-            System.out.println("DEBUG (WebSiteMapper): text to get Lemmas from is as follows: \n'" + webpage.getContent() + "'");
-            webpage.setLemmas(LemmaMapper.getLemmasFromText(webpage.getContent()));
-
+            webpage.setLemmas(LemmaMapper.getLemmasFromText(webpage.getContent()));*/
 
             Elements elements = doc.select("a[href]");
             for (Element item : elements) {
@@ -73,11 +78,9 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
                     }
                 }
             }
-        } catch (HttpStatusException e) {
-            e.printStackTrace();
-            // If we catch HttpStatusException, we need to additionally parse error 404?
         } catch (Exception e) {
             e.printStackTrace();
+
         }
 
         for (Map.Entry<String, WebsiteMapper> entry : taskList.entrySet()) {
