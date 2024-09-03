@@ -63,7 +63,7 @@ server:
 
 ## How to use
 
-Go to the Search Engine's web interface at `http://localhost:7777/`.
+Go to the Search Engine's web interface at `http://localhost:<server.port>/`.
 
 There are three tabs at web interface:
 1. Dashboard - you can find total amount of sites, webpages and lemmas here, as well as websites' info and indexing status.
