@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import searchengine.config.assets.SiteShort;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -6,6 +6,7 @@ import searchengine.entity.Lemma;
 import searchengine.entity.Page;
 import searchengine.mapper.assets.IndexTask;
 import searchengine.mapper.assets.WebPage;
+import searchengine.utils.DebugUtils;
 import searchengine.utils.SqlUtils;
 
 import java.util.HashMap;
@@ -17,6 +18,7 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
 
     private final JdbcTemplate jdbcTemplate;
     private final IndexTask indexTask;
+    private final DebugUtils debugUtils;
 
     @Override
     public IndexTask getRawResult() {
@@ -65,7 +67,7 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
                 }
             }
             SqlUtils.sendLastRequest(jdbcTemplate, "INSERT INTO website_index(page_id, lemma_id, lemma_rank) VALUES", sql);
-            System.out.println("DEBUG (WebsiteIndexMapper): last batch request sent, table 'website_index'");
+        System.out.println("DEBUG (WebsiteIndexMapper): last batch request sent, table 'website_index'");
         return true;
     }
 

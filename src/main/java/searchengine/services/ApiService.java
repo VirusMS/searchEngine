@@ -2,24 +2,22 @@ package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import searchengine.config.SiteShort;
+import searchengine.config.assets.SiteShort;
 import searchengine.config.SitesList;
 import searchengine.entity.*;
 import searchengine.exception.ApiServiceException;
 import searchengine.mapper.LemmaMapper;
 import searchengine.model.response.IndexingResponse;
+import searchengine.model.response.SearchItem;
 import searchengine.model.response.SearchResponse;
 import searchengine.repository.IndexRepository;
 import searchengine.repository.LemmaRepository;
 import searchengine.repository.PageRepository;
 import searchengine.repository.SiteRepository;
+import searchengine.utils.DebugUtils;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,7 +34,7 @@ public class ApiService {
     private static final String ERR_VALIDATION_EMPTY_QUERY = "Задан пустой поисковый запрос (параметр 'query')";
 
     private final SitesList siteList;
-
+    private final DebugUtils debugUtils;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
     private final LemmaRepository lemmaRepository;
@@ -82,10 +80,14 @@ public class ApiService {
 //        1. Разбивать поисковый запрос на отдельные слова и формировать из этих слов список уникальных лемм, исключая междометия, союзы, предлоги и частицы.
         List<String> lemmasRequest = LemmaMapper.getLemmasListFromText(query);
 
-        Optional<Site> siteOptional = siteRepository.findByUrl(siteToQuery);  //I guess there's nothing if all sites must be included.
+        Optional<Site> siteOptional = siteRepository.findByUrl(siteToQuery);
         List<Site> sitesToQuery = siteOptional.isPresent() ? List.of(siteOptional.get()) : siteRepository.findAllInList(siteList.getUrlList());
 
+        SearchResponse response = new SearchResponse();
+
         for (Site site : sitesToQuery) {
+            List<SearchResponse> items = new ArrayList<>();
+
             List<Lemma> lemmas = lemmaRepository.findAllBySiteAndLemmaList(site, lemmasRequest);
             int pageCount = pageRepository.countBySite(site);
 
@@ -102,6 +104,7 @@ public class ApiService {
 
 //        3. Сортировать леммы в порядке увеличения частоты встречаемости (по возрастанию значения поля frequency) — от самых редких до самых частых.
             lemmas = getAscendingLemmaList(lemmas);
+            List<Integer> lemmaIds = new ArrayList<>(lemmas.stream().map(Lemma::getId).toList());
 
 //        4. По первой, самой редкой лемме из списка, находить все страницы, на которых она встречается. Далее искать соответствия следующей леммы из этого списка страниц,
 //          а затем повторять операцию по каждой следующей лемме. Список страниц при этом на каждой итерации должен уменьшаться.
@@ -113,37 +116,56 @@ public class ApiService {
             }
             System.out.println("");
 
-            List<Index> index = indexRepository.findAllByPageList(pages);
+            List<Index> index = indexRepository.findByPageAndLemmaLists(pages, lemmas);
 
             i = pages.iterator();
             while (i.hasNext()) {
                 Page page = (Page) i.next();
 
-                List<Index> pageIndex = index.stream().filter(e -> e.getPage().getId() == page.getId()).toList();
-                List<Integer> lemmaIds = getLemmaIdsFromIndex(index);
+                List<Index> pageIndex = index.stream()
+                        .filter(e -> e.getPage().getId() == page.getId())
+                        .toList();
 
-                for (Lemma lemma : lemmas) {
-                    if (!lemmaIds.contains(lemma.getId())) {
-                        System.out.println("  DEBUG (search) lemma ID " + lemma.getId() + " not found for page '" + page.getPath() + "', deleting the page");
-                        i.remove();
+                List<Integer> lemmasIdsInIndex = index.stream()
+                        .filter(e -> {
+                            return e.getPage().getId() == page.getId();
+                        }).map(e -> {
+                            return e.getLemma().getId();
+                        })
+                        .toList();
+
+                System.out.println("");
+
+                if (lemmasIdsInIndex.isEmpty()) {
+                    System.out.println("DEBUG (search): none of lemmas are in index for page '" + page.getPath() + "'. Removing that page.");
+                    i.remove();
+                } else {
+                    for (Lemma lemma : lemmas) {
+                        if (!lemmasIdsInIndex.contains(lemma.getId())) {
+                            System.out.println("DEBUG (search): lemma '" + lemma.getLemma() + "' not found for page '" + page.getPath() + "'. Removing that page.");
+                            i.remove();
+                            break;
+                        }
                     }
                 }
             }
 
-            /*for (Index entry : index) {
-                Lemma lemmaFromIndex = entry.getLemma();
-                //System.out.println("  DEBUG (search): entry to parse: [lemma = '" + lemmaFromIndex + "', page = '" + entry.getPage() + "'");
-                if (!lemmas.contains(lemmaFromIndex)) {
-                    System.out.println("    DEBUG (search): lemma '" + lemmaFromIndex.getLemma() + "' not found in index entry, removing from lemma list.");
-                    lemmas.remove(lemmaFromIndex);
-                } else {
-                    //System.out.println("    DEBUG (search): lemma found in index entry");
-                }
-            }*/
-
             System.out.print("  DEBUG (search): all lemmas parsed in index, current page list = ");
+            response.setCount(response.getCount() + pages.size());
             for (Page page : pages) {
                 System.out.print("'" + page.getPath() + "' ");
+                List<Float> absRelevance = new ArrayList<>();
+
+                for (Lemma lemma : lemmas) {
+                    Index entry = findIndexEntryByPageAndLemma(index, page.getId(), lemma.getId());
+                    absRelevance.add(entry.getRank());
+                }
+
+                float maxAbsRelevance = (float) absRelevance.stream().mapToDouble(r -> r).max().getAsDouble();
+                float relativeRelevance = (float) absRelevance.stream().mapToDouble(r -> r).sum() / maxAbsRelevance;
+
+
+                response.addData(new SearchItem(site.getUrl(), site.getName(), page.getPath(), page.getTitle(), "dummy", Float.toString(round(relativeRelevance, 2))));
             }
             System.out.println("");
 
@@ -164,7 +186,32 @@ public class ApiService {
 //        8. Обратите внимание, что метод поиска должен учитывать, по каким сайтам происходит этот поиск — по всем или по тому, который выбран в веб-интерфейсе в
 //          выпадающем списке.
 
-        return new SearchResponse();
+        response.sortResultsByDescendingRelevancy();
+
+        System.out.println("DEBUG (ApiService.search): List of responses with relevances below:");
+        for (SearchItem item : response.getData()) {
+            System.out.println("  " + item.getTitle() + " - " + item.getRelevance());
+        }
+        return response;
+    }
+
+    //https://stackoverflow.com/questions/8911356/whats-the-best-practice-to-round-a-float-to-2-decimals
+    public float round(float number, int scale) {
+        int pow = 10;
+        for (int i = 1; i < scale; i++)
+            pow *= 10;
+        float tmp = number * pow;
+        return ( (float) ( (int) ((tmp - (int) tmp) >= 0.5f ? tmp + 1 : tmp) ) ) / pow;
+    }
+
+    private Index findIndexEntryByPageAndLemma(List<Index> index, int pageId, int lemmaId) {
+        for (Index entry : index) {
+            if (entry.getPage().getId() == pageId && entry.getLemma().getId() == lemmaId) {
+                return entry;
+            }
+        }
+
+        return null;
     }
 
     private List<Integer> getLemmaIdsFromIndex(List<Index> index) {
@@ -212,10 +259,10 @@ public class ApiService {
         List<Lemma> result = new ArrayList<>(lemmas);
 
         for (int i = 0; i < result.size() - 1; i++) {
-            for (int j = i; j < result.size() - i - 1; j++) {
+            for (int j = 0; j < result.size() - i - 1; j++) {
                 Lemma lj = result.get(j);
                 Lemma ljp = result.get(j + 1);
-                if (ljp.getFrequency() > lj.getFrequency()) {
+                if (ljp.getFrequency() < lj.getFrequency()) {
                     result.set(j, ljp);
                     result.set(j + 1, lj);
                 }

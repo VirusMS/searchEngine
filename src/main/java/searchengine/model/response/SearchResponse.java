@@ -12,10 +12,31 @@ import java.util.List;
 @AllArgsConstructor
 public class SearchResponse {
 
-    private boolean result;
+    private boolean result = true;
 
     private int count;
 
     private List<SearchItem> data = new ArrayList<>();
+
+    public void addData(SearchItem toAdd) {
+        data.add(toAdd);
+    }
+
+    public void sortResultsByDescendingRelevancy() {
+        List<SearchItem> items = data;
+
+        for (int i = 0; i < items.size() - 1; i++) {
+            for (int j = 0; j < items.size() - i - 1; j++) {
+                SearchItem ij = items.get(j);
+                SearchItem ijp = items.get(j + 1);
+                if (Float.parseFloat(ijp.getRelevance()) > Float.parseFloat(ij.getRelevance())) {
+                    items.set(j, ijp);
+                    items.set(j + 1, ij);
+                }
+            }
+        }
+
+        data = items;
+    }
 
 }

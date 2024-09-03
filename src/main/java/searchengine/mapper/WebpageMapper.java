@@ -4,15 +4,16 @@ import lombok.RequiredArgsConstructor;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Component;
-import searchengine.config.JsoupRequestConfig;
+import searchengine.config.AppConfig;
 import searchengine.mapper.assets.WebPage;
 
 @RequiredArgsConstructor
 @Component
 public class WebpageMapper {
 
-    private final JsoupRequestConfig requestConfig;
+    private final AppConfig appConfig;
 
     public Connection.Response getWebpageResponse(String url) {
 
@@ -21,8 +22,8 @@ public class WebpageMapper {
             Thread.sleep(250);
             response = Jsoup.connect(url)
                     .header("Accept-Language", "ru")
-                    .userAgent(requestConfig.getUserAgent())
-                    .referrer(requestConfig.getReferrer())
+                    .userAgent(appConfig.getUserAgent())
+                    .referrer(appConfig.getReferrer())
                     .followRedirects(false)
                     .execute();
         } catch (HttpStatusException e) {
@@ -34,21 +35,34 @@ public class WebpageMapper {
         return response;
     }
 
-    public WebPage getWebpage(String url, Integer siteId, Connection.Response response) {
+    public WebPage getWebpage(String url, Integer siteId, Connection.Response response, Document doc) {
         WebPage webpage = new WebPage(url, siteId);
 
         webpage.setStatusCode(response.statusCode());
 
         try {
-            String content = Jsoup.parse(response.parse().html()).wholeText() //We do not need tags, we only need page text to work with l8r
+//            String content = Jsoup.parse(doc.html())
+//                    .wholeText()
+//                    .replace('\n', ' ')
+//                    //.replaceAll("[^\\x20-\\x7e]", "") //Replacing non-ASCII chars.
+//                    .replaceAll(" {2,}", " ");
+            String content = doc.html();
+
+            String pageText = doc.wholeText()
                     .replace('\n', ' ')
+                    .replace('\t', ' ')
                     //.replaceAll("[^\\x20-\\x7e]", "") //Replacing non-ASCII chars.
                     .replaceAll(" {2,}", " ");
-            if (content.charAt(0) == ' ') {
-                content = content.substring(1);
+            if (pageText.charAt(0) == ' ') {
+                pageText = pageText.substring(1);
             }
+
+            webpage.setTitle(doc.title());
             webpage.setContent(content);
-            webpage.setLemmas(LemmaMapper.getLemmasAndCountsFromText(webpage.getContent()));
+            webpage.setLemmas(LemmaMapper.getLemmasAndCountsFromText(pageText));
+
+            //webpage.setContent(content);
+            //webpage.setLemmas(LemmaMapper.getLemmasAndCountsFromText(webpage.getContent()));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -56,8 +70,8 @@ public class WebpageMapper {
         return webpage;
     }
 
-    public WebPage getWebpage(Connection.Response response, WebPage source) {
-        WebPage result = getWebpage(source.getUrl(), source.getPageId(), response);
+    public WebPage getWebpage(Connection.Response response, WebPage source, Document doc) {
+        WebPage result = getWebpage(source.getUrl(), source.getPageId(), response, doc);
 
         result.setParentUrl(source.getParentUrl());
         result.setUrlList(source.getUrlList());

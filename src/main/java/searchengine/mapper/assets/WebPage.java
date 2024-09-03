@@ -13,6 +13,7 @@ public class WebPage {
     private String parentUrl;
     private Integer pageId;
     private Integer statusCode;
+    private String title;
     private String content;
     private HashMap<String, Integer> lemmas;
 
@@ -126,6 +127,7 @@ public class WebPage {
         this.statusCode = source.getStatusCode();
         this.content = source.getContent();
         this.lemmas = source.getLemmas();
+        this.title = source.getTitle();
     }
 
     private Map<String, WebPage> getFlatUrlList(Map<String, WebPage> previousList) {
@@ -151,6 +153,7 @@ public class WebPage {
         if (equalsLeniently(url, this.url)) {
             return true;
         }
+        //TODO: fix ConcurrentModificationException
         Collection<WebPage> thisUrlList = urlList.values();
         for (WebPage webpage : thisUrlList) {
             if (containsLeniently(webpage.getUrl(), checkedUrls) || webpage.getUrl().equals(parentUrl)) {

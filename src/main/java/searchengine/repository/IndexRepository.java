@@ -11,11 +11,12 @@ import java.util.List;
 public interface IndexRepository extends JpaRepository<Index, Integer> {
 
     @Query("SELECT i FROM Index i WHERE i.page = ?1")
-    public List<Index> findAllByPage(Page page);
+    public List<Index> findByPage(Page page);
 
     @Query("SELECT i FROM Index i WHERE i.page IN ?1")
-    public List<Index> findAllByPageList(List<Page> pages);
+    public List<Index> findByPageList(List<Page> pages);
 
     @Query("SELECT i FROM Index i WHERE i.page IN ?1 AND i.lemma IN ?2")
     public List<Index> findByPageAndLemmaLists(List<Page> pages, List<Lemma> lemmas);
+
 }

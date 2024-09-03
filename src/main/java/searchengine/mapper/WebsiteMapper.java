@@ -1,13 +1,11 @@
 package searchengine.mapper;
 
 import org.jsoup.Connection;
-import org.jsoup.HttpStatusException;
-import org.jsoup.Jsoup;
 
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import searchengine.config.JsoupRequestConfig;
+import searchengine.config.AppConfig;
 import searchengine.mapper.assets.WebPage;
 
 import java.util.HashMap;
@@ -20,25 +18,26 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
 
     private final WebPage webpage;
 
-    private final JsoupRequestConfig requestConfig;
+    private final AppConfig appConfig;
 
     private final WebpageMapper webpageMapper;
 
-    public WebsiteMapper(String url, Integer pageId, JsoupRequestConfig requestConfig) {
+    public WebsiteMapper(String url, Integer pageId, AppConfig requestConfig) {
         webpage = new WebPage(url, pageId);
-        this.requestConfig = requestConfig;
+        this.appConfig = requestConfig;
         webpageMapper = new WebpageMapper(requestConfig);
     }
 
-    public WebsiteMapper(WebPage webpage, JsoupRequestConfig requestConfig) {
+    public WebsiteMapper(WebPage webpage, AppConfig requestConfig) {
         this.webpage = webpage;
-        this.requestConfig = requestConfig;
+        this.appConfig = requestConfig;
         webpageMapper = new WebpageMapper(requestConfig);
     }
 
-    //  TODO: resolve java.net.SocketTimeoutException: Read timed out exceptions.
-    //  TODO: resolve java.net.ConnectException: Connection timed out: getsockopt - possible exception, prolly website thinks I am DDoS attacking them
-    //  TODO: handle cases when Connection.Response from WebpageMapper is null, if any
+    //TODO: resolve java.net.SocketTimeoutException: Read timed out exceptions.
+    //TODO: resolve java.net.ConnectException: Connection timed out: getsockopt - possible exception, prolly website thinks I am DDoS attacking them
+    //TODO: handle cases when Connection.Response from WebpageMapper is null, if any
+    //TODO: handle java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 500163
     @Override
     protected WebPage compute() {
         Map<String, WebsiteMapper> taskList = new HashMap<>();
@@ -53,7 +52,7 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
                 return null;
             }
 
-            webpage.clone(webpageMapper.getWebpage(response, webpage));
+            webpage.clone(webpageMapper.getWebpage(response, webpage, doc));
             /*webpage.setStatusCode(response.statusCode());
             String content = Jsoup.parse(doc.html()).wholeText() //We do not need tags, we only need page text to work with l8r
                     .replace('\n', ' ')
@@ -71,10 +70,10 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
                 if (!webpage.hasLink(url)) {
                     if (url.contains(originalLink) && !taskList.containsKey(url) && !webpage.equalsLeniently(webpage.getUrl(), url)) {
                         webpage.addUrlToList(url); // It will be replaced l8r when task is done, for now we need it in list to avoid repeating same links
-                        WebsiteMapper task = new WebsiteMapper(webpage.getUrlList().get(url), requestConfig);// Don't create new branches here, stay in initial tree!
+                        WebsiteMapper task = new WebsiteMapper(webpage.getUrlList().get(url), appConfig);// Don't create new branches here, stay in initial tree!
                         task.fork();
                         taskList.put(url, task);
-                        System.out.println("[" + this + "]: \n  to [" + webpage + "] " + webpage.getUrl() + "\n  added [" + webpage.getUrlList().get(url) + "] " + url);
+                        System.out.println("DEBUG (WebsiteMapper): [" + this + "]: \n  to [" + webpage + "] " + webpage.getUrl() + "\n  added [" + webpage.getUrlList().get(url) + "] " + url);
                     }
                 }
             }

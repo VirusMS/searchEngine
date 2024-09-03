@@ -2,7 +2,7 @@ package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import searchengine.config.SiteShort;
+import searchengine.config.assets.SiteShort;
 import searchengine.config.SitesList;
 import searchengine.model.DetailedStatisticsItem;
 import searchengine.model.StatisticsData;
