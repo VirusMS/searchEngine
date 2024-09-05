@@ -41,6 +41,37 @@ public class LemmaMapper {
         return lemmas;
     }
 
+    public static List<String> getListOfWordsWithBaseForms(String text, List<String> lemmas) {
+        List<String> result = new ArrayList<>();
+
+        try {
+            LuceneMorphology luceneMorph = new RussianLuceneMorphology();
+            List<String> words = splitTextToWords(text);
+
+            for (String word : words) {
+                //TODO: try to deal with cases of words' base forms such as "какой-ть"
+                //TODO: java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 500163 @ getNormalForms
+                List<String> wordBaseForms = luceneMorph.getNormalForms(word);
+                List<String> morphInfo = luceneMorph.getMorphInfo(word);
+
+                for (int i = 0; i < wordBaseForms.size(); i++) { //both morphs and base forms are similar in position as well as size
+                    String morph = morphInfo.get(i);
+                    String baseForm = wordBaseForms.get(i);
+                    if (!morph.contains("ПРЕДЛ") && !morph.contains("СОЮЗ") && !morph.contains("МЕЖД")) {
+                        if (lemmas.contains(baseForm)) {
+                            result.add(word);
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+
     public static List<String> getLemmasListFromText(String text) {
         return new ArrayList<>(getLemmasAndCountsFromText(text).keySet());
     }

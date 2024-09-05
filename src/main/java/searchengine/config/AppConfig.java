@@ -15,6 +15,8 @@ public class AppConfig {
 
     private boolean debug;
 
+    private int snippetRadius;
+
     @NestedConfigurationProperty
     private WebRequest webRequest;
 
