@@ -4,9 +4,12 @@ indexing-settings:
   sites:
   - url: http://www.playback.ru
     name: плэйбэк ру
-web-request:
-  user-agent: VMSSearchBot
-  referrer: http://google.com
+application:
+  debug: true
+  snippet-radius: 5
+  web-request:
+    user-agent: VMSSearchBot
+    referrer: http://google.com
 spring:
   datasource:
     username: root
