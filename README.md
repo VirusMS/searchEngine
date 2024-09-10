@@ -30,7 +30,7 @@ This program is a search and indexing engine. It's a final solo project from Ski
 1. Install [MySQL Community](https://dev.mysql.com/downloads/installer/) if not yet installed on your PC;
 2. Using MySQL Workbench, login to your database and create schema `search_engine`;
 3. Open project directory and find project configuration file at `../src/main/resources/application.yaml`.
-  Set up database connectivity details in the config file. For example, if your MySQL database runs on port 3306, and login/password are admin/password, you will need to set up the following information:
+  Set up database connectivity details in the config file. For example, if your MySQL database runs on port 3306, and login/password are admin/password, you will need to set up the following parameters in `spring.datasource`:
 ```
 spring:
   datasource:
@@ -42,7 +42,7 @@ spring:
 4. You should be good to go! Start the application by running `../src/main/java/searchengine/Application.java`
 
 ### You can or should... 
-Set up websites that you wish the program to work with. Set up as many website as you want in `indexing-settings.sites`:
+- Set up websites that you wish the program to work with. Set up as many websites as you want in `indexing-settings.sites`:
 
 ```
 indexing-settings:
@@ -54,7 +54,24 @@ indexing-settings:
   ...
 ```
 
-Finally, set up a port of your choice for the program by setting `server.port` to a desired value:
+- Set `application.debug` to true or false, depending on whether you want to have debug console output:
+
+```
+application:
+  debug: true
+```
+
+- Adjust search settings:
+  1) `application.snippet-radius` allows to pick bigger or smaller parts of text that contains matches from your search request. Snippet radius ignores the found word, e.g. if you set it to 1, you will receive snippets of text up to 3 words, depending on surrounding HTML tags;
+  2) `application.max-relative-frequency` is a parameter that allows you to remove relatively popular words from your search request, its value ranging from 0.0 to 1.0:
+
+```
+application:
+  snippet-radius: 5
+  max-relative-frequency: 0.95
+```
+
+- Finally, set up a port of your choice for the program by setting `server.port` to a desired value:
 
 ```
 server:
