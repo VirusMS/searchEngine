@@ -17,6 +17,8 @@ public class AppConfig {
 
     private int snippetRadius;
 
+    private double maxRelativeFrequency;
+
     @NestedConfigurationProperty
     private WebRequest webRequest;
 

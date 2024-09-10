@@ -6,6 +6,7 @@ import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class LemmaMapper {
 
@@ -69,7 +70,7 @@ public class LemmaMapper {
             e.printStackTrace();
         }
 
-        return result;
+        return result.stream().distinct().collect(Collectors.toList());
     }
 
     public static List<String> getLemmasListFromText(String text) {

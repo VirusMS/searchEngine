@@ -8,6 +8,7 @@ import searchengine.config.SitesList;
 import searchengine.entity.*;
 import searchengine.exception.ApiServiceException;
 import searchengine.mapper.LemmaMapper;
+import searchengine.mapper.SnippetMapper;
 import searchengine.mapper.assets.SnippetIndex;
 import searchengine.model.response.IndexingResponse;
 import searchengine.model.response.SearchItem;
@@ -25,7 +26,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ApiService {
 
-    private static final Pattern HttpPattern = Pattern.compile("^https?:\\/\\/(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b([-a-zA-Z0-9()@:%_\\+.~#?&//=]*)");
+    private static final Pattern PATTERN_HTTP = Pattern.compile("^https?:\\/\\/(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b([-a-zA-Z0-9()@:%_\\+.~#?&//=]*)");
     //Pattern src: https://stackoverflow.com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url
     private static final String ERR_INDEXING_ON = "Индексация уже запущена";
     private static final String ERR_INDEXING_OFF = "Индексация не запущена";
@@ -79,9 +80,6 @@ public class ApiService {
 
         validateRequest(query, siteToQuery, offset, limit);
 
-        //System.out.println("DEBUG (search) : request = " + request);
-
-//        1. Разбивать поисковый запрос на отдельные слова и формировать из этих слов список уникальных лемм, исключая междометия, союзы, предлоги и частицы.
         List<String> lemmasRequest = LemmaMapper.getLemmasListFromText(query);
 
         Optional<Site> siteOptional = siteRepository.findByUrl(siteToQuery);
@@ -89,80 +87,19 @@ public class ApiService {
 
         SearchResponse response = new SearchResponse();
 
-//        Обратите внимание, что метод поиска должен учитывать, по каким сайтам происходит этот поиск — по всем или по тому, который выбран в веб-интерфейсе в
-//          выпадающем списке.
         for (Site site : sitesToQuery) {
-            List<SearchResponse> items = new ArrayList<>();
 
-            List<Lemma> lemmas = lemmaRepository.findAllBySiteAndLemmaList(site, lemmasRequest);
-            int pageCount = pageRepository.countBySite(site);
+            List<Lemma> lemmas = getAscendingFrequencyLemmaList(
+                    removeLemmasOfHighFrequency(site, lemmaRepository.findAllBySiteAndLemmaList(site, lemmasRequest), appConfig.getMaxRelativeFrequency())
+            );  //TODO: figure out which percentage is best here and apply it
 
-//        2. Исключать из полученного списка леммы, которые встречаются на слишком большом количестве страниц. Поэкспериментируйте и определите этот процент самостоятельно
-//        СООТНОШЕНИЕ frequency / кол-во страниц - то, что нам надо
-            Iterator i = lemmas.iterator();
-            while (i.hasNext()) {
-                int relativeFrequency = ((Lemma) i.next()).getFrequency() / pageCount;
-                if (relativeFrequency > 0.95) { //TODO: figure out which percentage is best here and apply it
-                    System.out.println("DEBUG (search): relative frequency is beyond acceptable for lemma '" + ((Lemma) i.next()).getLemma() + "', removing that lemma");
-                    i.remove();
-                }
-            }
-
-//        3. Сортировать леммы в порядке увеличения частоты встречаемости (по возрастанию значения поля frequency) — от самых редких до самых частых.
-            lemmas = getAscendingLemmaList(lemmas);
-            List<Integer> lemmaIds = new ArrayList<>(lemmas.stream().map(Lemma::getId).toList());
-
-//        4. По первой, самой редкой лемме из списка, находить все страницы, на которых она встречается. Далее искать соответствия следующей леммы из этого списка страниц,
-//          а затем повторять операцию по каждой следующей лемме. Список страниц при этом на каждой итерации должен уменьшаться.
             List<Page> pages = pageRepository.findAllBySite(site);
-
-            System.out.print("DEBUG (search): list of pages found for '" + site.getUrl() + "': ");
-            for (Page page : pages) {
-                System.out.print("'" + page.getPath() + "' ");
-            }
-            System.out.println("");
-
             List<Index> index = indexRepository.findByPageAndLemmaLists(pages, lemmas);
+            pages = getPagesWithRequiredLemmasInIndex(pages, lemmas, index);
 
-            i = pages.iterator();
-            while (i.hasNext()) {
-                Page page = (Page) i.next();
-
-                List<Index> pageIndex = index.stream()
-                        .filter(e -> e.getPage().getId() == page.getId())
-                        .toList();
-
-                List<Integer> lemmasIdsInIndex = index.stream()
-                        .filter(e -> {
-                            return e.getPage().getId() == page.getId();
-                        }).map(e -> {
-                            return e.getLemma().getId();
-                        })
-                        .toList();
-
-                System.out.println("");
-
-                if (lemmasIdsInIndex.isEmpty()) {
-                    System.out.println("DEBUG (search): none of lemmas are in index for page '" + page.getPath() + "'. Removing that page.");
-                    i.remove();
-                } else {
-                    for (Lemma lemma : lemmas) {
-                        if (!lemmasIdsInIndex.contains(lemma.getId())) {
-                            System.out.println("DEBUG (search): lemma '" + lemma.getLemma() + "' not found for page '" + page.getPath() + "'. Removing that page.");
-                            i.remove();
-                            break;
-                        }
-                    }
-                }
-            }
-
-            System.out.print("  DEBUG (search): all lemmas parsed in index, current page list = ");
             response.setCount(response.getCount() + pages.size());
 
-//        5. Для каждой страницы рассчитывать абсолютную релевантность — сумму всех rank всех найденных на странице лемм (из таблицы index), которая делится на максимальное
-//          значение этой абсолютной релевантности для всех найденных страниц.
             for (Page page : pages) {
-                System.out.print("'" + page.getPath() + "' ");
                 List<Float> absRelevance = new ArrayList<>();
 
                 for (Lemma lemma : lemmas) {
@@ -173,110 +110,12 @@ public class ApiService {
                 float maxAbsRelevance = (float) absRelevance.stream().mapToDouble(r -> r).max().getAsDouble();
                 float relativeRelevance = (float) absRelevance.stream().mapToDouble(r -> r).sum() / maxAbsRelevance;
 
-//        7. Сниппеты — фрагменты текстов, в которых найдены совпадения, для всех страниц должны быть примерно одинаковой длины — такие, чтобы на странице с результатами
-//          поиска они занимали примерно три строки. В них необходимо выделять жирным совпадения с исходным поисковым запросом. Выделение должно происходить в формате HTML
-//          при помощи тега <b>. Алгоритм получения сниппета из веб-страницы реализуйте самостоятельно.
-
-                String content = page.getContent().replaceAll("<[/]?((b|i|t|em|strong|font|a|br)(>|[ ]{1}[^>]{1,}>))", "") //These are the tags that are strictly word emphasis only
-                .replaceAll("\n", " ");
-
-                List<String> wordsFoundOnPage = LemmaMapper.getListOfWordsWithBaseForms(content, getBaseFormsFromLemmaList(lemmas));  //Key is word, Value is base form
-                HashMap<Integer, String> wordPositions = new HashMap<>();
-
-                for (String word : wordsFoundOnPage) {
-                    int wordIndex = content.indexOf(word);
-                    if (wordIndex != -1) {
-                        wordPositions.put(content.indexOf(word), word);
-                    }
-                }
-
-                List<SnippetIndex> snippetIndexList = new ArrayList<>();
-                for (int pos : wordPositions.keySet()) {
-                    int pl = pos == 0 ? pos : pos - 1;
-                    int pr = pos + wordPositions.get(pos).length();
-                    int wc = 0;
-                    while (wc < appConfig.getSnippetRadius()) {
-                        while (!isPartOfWord(content.charAt(pl)) && pl > 0) {
-                            if (content.charAt(pl) == '>') {
-                                pl++;
-                                break;
-                            }
-                            pl--;
-                        }
-                        while (isPartOfWord(content.charAt(pl)) && pl > 0) {
-                            pl--;
-                        }
-                        wc++;
-                        if (content.charAt(pl) == '>') {
-                            pl++;
-                            break;
-                        }
-                    }
-
-                    wc = 0;
-                    while (wc < appConfig.getSnippetRadius()) {
-                        while (!isPartOfWord(content.charAt(pr)) && pr < content.length()) {
-                            if (content.charAt(pr) == '<') {
-                                pr--;
-                                break;
-                            }
-                            pr++;
-                        }
-                        while (isPartOfWord(content.charAt(pr)) && pr < content.length()) {
-                            pr++;
-                        }
-                        wc++;
-                        if (content.charAt(pl) == '<') {
-                            pl--;
-                            break;
-                        }
-                    }
-                    snippetIndexList.add(new SnippetIndex(pl, pr));
-                }
-
-                Iterator<SnippetIndex> snippetIterator = snippetIndexList.iterator();
-
-                while (snippetIterator.hasNext()) {
-                    SnippetIndex entry = snippetIterator.next();
-                    SnippetIndex collision = getSnippetCollision(entry, snippetIndexList);
-
-                    while (collision != null) {
-                        entry.mergeIndexes(collision);
-                        snippetIndexList.remove(collision);
-                        collision = getSnippetCollision(entry, snippetIndexList);
-                    }
-                }
-
-                StringBuilder snippetBuilder = new StringBuilder();
-
-                for (SnippetIndex entry : snippetIndexList) {
-                    snippetBuilder.append("... ").append(content.substring(entry.getStart(), entry.getEnd())).append(" ... <...> ");
-                }
-                snippetBuilder = new StringBuilder(snippetBuilder.substring(0, snippetBuilder.length() - 7));
-                for (String word : wordsFoundOnPage) {
-                    int wordPos = snippetBuilder.indexOf(word);
-                    if (wordPos == -1) {
-                        continue;
-                    }
-                    snippetBuilder.replace(wordPos, wordPos + word.length(), "<b>" + word + "</b>");
-                }
-
-                response.addData(new SearchItem(site.getUrl(), site.getName(), page.getPath(), page.getTitle(), snippetBuilder.toString(), Float.toString(round(relativeRelevance, 2))));
+                String snippets = SnippetMapper.getSnippets(page, lemmas, appConfig.getSnippetRadius());
+                response.addData(new SearchItem(site.getUrl(), site.getName(), page.getPath(), page.getTitle(), snippets, Float.toString(round(relativeRelevance, 2))));
             }
-            System.out.println("");
-
         }
 
-//        6. Сортировать страницы по убыванию релевантности (от большей к меньшей) и выдавать в виде списка объектов
         response.sortResultsByDescendingRelevancy();
-
-        System.out.println("DEBUG (ApiService.search): List of responses with relevances below:");
-        for (SearchItem item : response.getData()) {
-            System.out.println("  " + item.getTitle() + " - " + item.getRelevance());
-        }
-
-
-
         return response;
     }
 
@@ -325,7 +164,7 @@ public class ApiService {
 
     private void validateRequest(String query, String site, int offset, int limit) {
         if (site != null) {
-            if (!HttpPattern.matcher(site).matches()) {
+            if (!PATTERN_HTTP.matcher(site).matches()) {
                 throw new ApiServiceException(ERR_VALIDATION_WRONG_URL);
             }
         }
@@ -340,7 +179,7 @@ public class ApiService {
         }
     }
 
-    private List<Lemma> getAscendingLemmaList(List<Lemma> lemmas) {
+    private List<Lemma> getAscendingFrequencyLemmaList(List<Lemma> lemmas) {
         List<Lemma> result = new ArrayList<>(lemmas);
 
         for (int i = 0; i < result.size() - 1; i++) {
@@ -357,40 +196,62 @@ public class ApiService {
         return result;
     }
 
-    private List<String> getBaseFormsFromLemmaList(List<Lemma> lemmas) {
-        List<String> result = new ArrayList<>();
+    private List<Lemma> removeLemmasOfHighFrequency(Site site, List<Lemma> lemmas, double maxRelativeFrequency) {
+        int pageCount = pageRepository.countBySite(site);
+        List<Lemma> newLemmas = new ArrayList<>(lemmas);
 
-        for (Lemma lemma : lemmas) {
-            result.add(lemma.getLemma());
-        }
-
-        return result;
-    }
-
-    private boolean isPartOfWord(char symbol) {
-        return ((symbol >= 'а' && symbol <= 'я') || (symbol >= 'А' && symbol <= 'Я') || (symbol == 'ё' || symbol == 'е')
-                || (symbol >= 'a' && symbol <= 'z') || (symbol >= 'A' && symbol <= 'Z')
-                || symbol == '-');
-    }
-
-    private SnippetIndex getSnippetCollision(SnippetIndex target, List<SnippetIndex> snippetIndexList) {
-        int targetStart = target.getStart();
-        int targetEnd = target.getEnd();
-
-        for (SnippetIndex entry : snippetIndexList) {
-            if (target.equals(entry)) {
-                continue;
-            }
-
-            int entryStart = entry.getStart();
-            int entryEnd = entry.getEnd();
-
-            if ((entryStart >= targetStart && entryStart <= targetEnd) || (entryEnd >= targetStart && entryEnd <= targetEnd)) {
-                return entry;
+        Iterator i = newLemmas.iterator();
+        while (i.hasNext()) {
+            int relativeFrequency = ((Lemma) i.next()).getFrequency() / pageCount;
+            if (relativeFrequency > maxRelativeFrequency) {
+                System.out.println("DEBUG (ApiService.removeLemmasByHighFrequency): relative frequency is beyond acceptable for lemma '" + ((Lemma) i.next()).getLemma() + "', removing that lemma");
+                i.remove();
             }
         }
 
-        return null;
+        return newLemmas;
+    }
+
+    private List<Page> getPagesWithRequiredLemmasInIndex(List<Page> pages, List<Lemma> lemmas, List<Index> index) {
+        List<Page> foundPages = new ArrayList<>(pages);
+
+        Iterator i = foundPages.iterator();
+
+        while (i.hasNext()) {
+            Page page = (Page) i.next();
+
+            /*List<Index> pageIndex = index.stream()
+                    .filter(e -> e.getPage().getId() == page.getId())
+                    .toList();
+
+            List<Integer> lemmasIdsInIndex = index.stream()
+                    .filter(e -> {
+                        return e.getPage().getId() == page.getId();
+                    }).map(e -> {
+                        return e.getLemma().getId();
+                    })
+                    .toList();*/
+
+            List<Integer> lemmasIdsInIndex = index.stream()
+                    .filter(e -> e.getPage().getId() == page.getId())
+                    .map(e -> e.getLemma().getId())
+                    .toList();
+
+            if (lemmasIdsInIndex.isEmpty()) {
+                System.out.println("DEBUG (ApiService.getPagesWithRequiredLemmasInIndex): none of lemmas are in index for page '" + page.getPath() + "'. Removing that page.");
+                i.remove();
+            } else {
+                for (Lemma lemma : lemmas) {
+                    if (!lemmasIdsInIndex.contains(lemma.getId())) {
+                        System.out.println("DEBUG (ApiService.getPagesWithRequiredLemmasInIndex): lemma '" + lemma.getLemma() + "' not found for page '" + page.getPath() + "'. Removing that page.");
+                        i.remove();
+                        break;
+                    }
+                }
+            }
+        }
+
+        return foundPages;
     }
 
 }
