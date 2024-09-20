@@ -1,5 +1,5 @@
 # searchEngine
-This program is a search and indexing engine. It's a final solo project from Skillbox.ru's 'Profession Java-Developer' courses. It is currently a work-in-progress, and it's about 70% done. The project is yet to have a peer review to be considered completed.
+This program is a search and indexing engine. It's a final solo project from Skillbox.ru's 'Profession Java-Developer' courses. It is currently a work-in-progress, and it's about 95% done. The project is yet to have a peer review to be considered completed.
 
 ## Content
 - [Project technologies](#project-technologies)
