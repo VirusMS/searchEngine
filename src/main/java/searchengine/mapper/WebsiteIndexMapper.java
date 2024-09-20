@@ -39,7 +39,7 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
 
             HashMap<String, Integer> pageLemmas = webpage.getLemmas();
             if (pageLemmas == null || !webpage.isDefinedCorrectly()) { //Need to figure out when that happens and why
-                System.out.println("DEBUG (WebsiteIndexMapper): incorrect page is below\n" + webpage);
+                debugUtils.println("DEBUG (WebsiteIndexMapper): incorrect page is below\n" + webpage);
                 return false;
             }
 
@@ -59,7 +59,7 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
                 }
                 if (SqlUtils.sendBatchRequest(jdbcTemplate, count, indexTask.getMaxSqlBatchSize(),
                         "INSERT INTO website_index(page_id, lemma_id, lemma_rank) VALUES", sql, indexTask.getSiteId())) {
-                    System.out.println("DEBUG (WebsiteIndexMapper): batch request sent, table 'website_index'");
+                    debugUtils.println("DEBUG (WebsiteIndexMapper): batch request sent, table 'website_index'");
                     sql = new StringBuilder();
                     count = 0;
                 } else {
@@ -67,7 +67,7 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
                 }
             }
             SqlUtils.sendLastRequest(jdbcTemplate, "INSERT INTO website_index(page_id, lemma_id, lemma_rank) VALUES", sql);
-        System.out.println("DEBUG (WebsiteIndexMapper): last batch request sent, table 'website_index'");
+        debugUtils.println("DEBUG (WebsiteIndexMapper): last batch request sent, table 'website_index'");
         return true;
     }
 

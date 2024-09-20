@@ -12,9 +12,6 @@ import java.util.Optional;
 @Repository
 public interface SiteRepository extends JpaRepository<Site, Integer> {
 
-    @Query("SELECT s FROM Site s WHERE s.url IN ?1")
-    List<Site> findAllInList(List<String> urls);
-
     default Optional<Site> findByUrl(String url) {
         return findOne(Example.of(new Site(null, null, null, null, url, null)));
     }

@@ -14,15 +14,9 @@ public class DebugUtils {
 
     public void println(String message) {
 
-        //if (appConfig.isDebug()) {
+        if (appConfig.isDebug()) {
             System.out.println(message);
-        //}
-    }
-
-    public void print(String message) {
-        //if (appConfig.isDebug()) {
-            System.out.print(message);
-        //}
+        }
     }
 
 }

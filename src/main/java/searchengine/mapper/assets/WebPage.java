@@ -106,15 +106,6 @@ public class WebPage {
         return result;
     }
 
-    /*@Override
-    public String toString() {
-        StringBuilder result = new StringBuilder();
-        result.append("url = ").append(url).append("; parentUrl = ").append(parentUrl).append("; pageId = ").append(pageId)
-                .append("; statusCode = ").append(statusCode).append(";\nlemmas = ").append(lemmas)
-                .append(";\ncontent = ").append(content);
-        return result.toString();
-    }*/
-
     public boolean isDefinedCorrectly() {
         return !(lemmas == null || content == null || statusCode == null);
     }

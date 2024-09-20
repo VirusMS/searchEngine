@@ -12,7 +12,6 @@ public class SqlUtils {
         int curBatchSize = batchSize;
 
         if (++curBatchSize >= maxBatchSize && !values.isEmpty()) {
-            //System.out.println("DEBUG (sendBatchRequest): current SQL request: \n" + command + values);
             jdbcTemplate.execute(command + values);
 
             String updateSql = "UPDATE site SET status_time = '"

@@ -42,10 +42,10 @@ spring:
 4. You should be good to go! Start the application by running `../src/main/java/searchengine/Application.java`
 
 ### You can or should... 
-- Set up websites that you wish the program to work with. Set up as many websites as you want in `indexing-settings.sites`:
+- Set up websites that you wish the program to work with. Set up as many websites as you want in `application.sites`. All website URLs must be provided without a last slash, akin to example below:
 
 ```
-indexing-settings:
+application:
   sites:
   - url: http://www.some-website.com
     name: Website one
@@ -62,13 +62,14 @@ application:
 ```
 
 - Adjust search settings:
-  1) `application.snippet-radius` allows to pick bigger or smaller parts of text that contains matches from your search request. Snippet radius ignores the found word, e.g. if you set it to 1, you will receive snippets of text up to 3 words, depending on surrounding HTML tags;
-  2) `application.max-relative-frequency` is a parameter that allows you to remove relatively popular words from your search request, its value ranging from 0.0 to 1.0:
+  1) `application.search.snippet-radius` allows to pick bigger or smaller parts of text that contains matches from your search request. Snippet radius ignores the found word, e.g. if you set it to 1, you will receive snippets of text up to 3 words, depending on surrounding HTML tags;
+  2) `application.search.max-relative-frequency` is a parameter that allows you to remove relatively popular words from your search request, its value ranging from 0.0 to 1.0:
 
 ```
 application:
-  snippet-radius: 5
-  max-relative-frequency: 0.95
+  search:
+    snippet-radius: 5
+    max-relative-frequency: 0.95
 ```
 
 - Finally, set up a port of your choice for the program by setting `server.port` to a desired value:

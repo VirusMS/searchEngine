@@ -21,8 +21,4 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
     @Query("SELECT COUNT(ALL p) FROM Page p WHERE p.site = ?1")
     int countBySite(Site site);
 
-    /*default List<Page> findAllBySite(Site site) {
-        return findAll(Example.of(new Page(null, site, null, null, null)));
-    }*/
-
 }

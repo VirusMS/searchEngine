@@ -2,7 +2,6 @@ package searchengine.controllers;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import searchengine.model.request.SearchRequest;
 import searchengine.model.response.IndexingResponse;
 import searchengine.model.response.SearchResponse;
 import searchengine.model.response.StatisticsResponse;

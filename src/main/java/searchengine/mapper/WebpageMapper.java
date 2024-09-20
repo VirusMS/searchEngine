@@ -26,6 +26,7 @@ public class WebpageMapper {
                     .referrer(appConfig.getReferrer())
                     .followRedirects(false)
                     .execute();
+        } catch (InterruptedException e) {
         } catch (HttpStatusException e) {
             e.printStackTrace();
         // If we catch HttpStatusException, we need to additionally parse error 404?
@@ -41,17 +42,11 @@ public class WebpageMapper {
         webpage.setStatusCode(response.statusCode());
 
         try {
-//            String content = Jsoup.parse(doc.html())
-//                    .wholeText()
-//                    .replace('\n', ' ')
-//                    //.replaceAll("[^\\x20-\\x7e]", "") //Replacing non-ASCII chars.
-//                    .replaceAll(" {2,}", " ");
             String content = doc.html();
 
             String pageText = doc.wholeText()
                     .replace('\n', ' ')
                     .replace('\t', ' ')
-                    //.replaceAll("[^\\x20-\\x7e]", "") //Replacing non-ASCII chars.
                     .replaceAll(" {2,}", " ");
             if (pageText.charAt(0) == ' ') {
                 pageText = pageText.substring(1);
@@ -61,8 +56,7 @@ public class WebpageMapper {
             webpage.setContent(content);
             webpage.setLemmas(LemmaMapper.getLemmasAndCountsFromText(pageText));
 
-            //webpage.setContent(content);
-            //webpage.setLemmas(LemmaMapper.getLemmasAndCountsFromText(webpage.getContent()));
+        } catch (StringIndexOutOfBoundsException e) {
         } catch (Exception e) {
             e.printStackTrace();
         }

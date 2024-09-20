@@ -1,16 +1,18 @@
 server:
   port: 7777
-indexing-settings:
-  sites:
-  - url: http://www.playback.ru
-    name: плэйбэк ру
 application:
   debug: true
-  snippet-radius: 5
-  max-relative-frequency: 0.95
+  search:
+    snippet-radius: 3
+    max-relative-frequency: 0.95
   web-request:
     user-agent: VMSSearchBot
     referrer: http://google.com
+  sites:
+    - url: https://www.battlestategames.com
+      name: Battlestate Games official site
+    - url: http://www.playback.ru
+      name: плэйбэк ру
 spring:
   datasource:
     username: root

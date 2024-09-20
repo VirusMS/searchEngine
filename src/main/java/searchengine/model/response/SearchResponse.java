@@ -18,8 +18,8 @@ public class SearchResponse {
 
     private List<SearchItem> data = new ArrayList<>();
 
-    public void addData(SearchItem toAdd) {
-        data.add(toAdd);
+    public void addData(List<SearchItem> toAdd) {
+        data.addAll(toAdd);
     }
 
     public void sortResultsByDescendingRelevancy() {
