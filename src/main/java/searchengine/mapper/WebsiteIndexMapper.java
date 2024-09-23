@@ -38,7 +38,7 @@ public class WebsiteIndexMapper extends ForkJoinTask<IndexTask> {
             int count = 0;
 
             HashMap<String, Integer> pageLemmas = webpage.getLemmas();
-            if (pageLemmas == null || !webpage.isDefinedCorrectly()) { //Need to figure out when that happens and why
+            if (pageLemmas == null || !webpage.isDefinedCorrectly()) {
                 debugUtils.println("DEBUG (WebsiteIndexMapper): incorrect page is below\n" + webpage);
                 return false;
             }

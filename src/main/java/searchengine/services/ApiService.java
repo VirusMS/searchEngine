@@ -28,6 +28,7 @@ public class ApiService {
     private static final Pattern PATTERN_HTTP = Pattern.compile("^https?:\\/\\/(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b([-a-zA-Z0-9()@:%_\\+.~#?&//=]*)");
     private static final String ERR_INDEXING_ON = "Индексация уже запущена";
     private static final String ERR_INDEXING_OFF = "Индексация не запущена";
+    private static final String ERR_INDEXING_NOT_DONE = "Сайт не был проиндексирован!";
     private static final String ERR_SITE_NOT_IN_CONFIG = "Данная страница находится за пределами сайтов, указанных в конфигурационном файле";
     private static final String ERR_VALIDATION_WRONG_URL = "Указанный в запросе URL неверен!";
     private static final String ERR_VALIDATION_WRONG_LIMIT = "Параметр Limit не может быть меньше 0!";
@@ -50,9 +51,7 @@ public class ApiService {
             throw new ApiServiceException(ERR_INDEXING_ON);
         }
 
-        indexingTask = new IndexingTask(() -> {
-            indexingService.startIndexing();
-        });
+        indexingTask = new IndexingTask(indexingService::startIndexing);
         indexingTask.start();
 
         return new IndexingResponse(true);
@@ -94,7 +93,7 @@ public class ApiService {
             if (siteOptional.isPresent()) {
                 sitesToQuery = List.of(siteOptional.get());
             } else {
-                throw new ApiServiceException("Сайт не был проиндексирован!");
+                throw new ApiServiceException(ERR_INDEXING_NOT_DONE);
             }
         }
 
@@ -242,7 +241,7 @@ public class ApiService {
             Page page = (Page) i.next();
 
             List<Integer> lemmasIdsInIndex = index.stream()
-                    .filter(e -> e.getPage().getId() == page.getId())
+                    .filter(e -> e.getPage().getId().equals(page.getId()))
                     .map(e -> e.getLemma().getId())
                     .toList();
 

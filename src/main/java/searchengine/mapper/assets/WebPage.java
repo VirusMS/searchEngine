@@ -35,7 +35,7 @@ public class WebPage {
     }
 
     public void addUrlToList(WebPage webpage) {
-        if (!webpage.equals(null)) {    //null webpage is returned in some cases, these ought to be ignored
+        if (!webpage.equals(null)) {
             urlList.put(webpage.getUrl(), webpage);
         }
     }
@@ -92,7 +92,7 @@ public class WebPage {
 
         for (WebPage webpage : flatUrlList.values()) {
             if (webpage.equals(null)) {
-                continue;   //we skip null values
+                continue;
             }
             for (String lemma : lemmas.keySet()) {
                 if (result.containsKey(lemma)) {
@@ -144,13 +144,13 @@ public class WebPage {
         if (equalsLeniently(url, this.url)) {
             return true;
         }
-        //TODO: fix ConcurrentModificationException
         Collection<WebPage> thisUrlList = urlList.values();
+        List<String> checked = new ArrayList<>(checkedUrls);
         for (WebPage webpage : thisUrlList) {
-            if (containsLeniently(webpage.getUrl(), checkedUrls) || webpage.getUrl().equals(parentUrl)) {
+            if (containsLeniently(webpage.getUrl(), checked) || webpage.getUrl().equals(parentUrl)) {
                 continue;
             }
-            if (webpage.hasLink(url, checkedUrls)) {
+            if (webpage.hasLink(url, checked)) {
                 return true;
             }
         }

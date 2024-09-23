@@ -7,8 +7,11 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import searchengine.config.AppConfig;
 import searchengine.mapper.assets.WebPage;
+import searchengine.services.IndexingService;
 import searchengine.utils.DebugUtils;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.RecursiveTask;
@@ -21,24 +24,24 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
     private final AppConfig appConfig;
     private final WebpageMapper webpageMapper;
     private final DebugUtils debugUtils;
+    private final IndexingService indexingService;
 
-    public WebsiteMapper(String url, Integer pageId, AppConfig appConfig) {
+    public WebsiteMapper(String url, Integer pageId, AppConfig appConfig, IndexingService indexingService) {
         webpage = new WebPage(url, pageId);
         this.appConfig = appConfig;
         webpageMapper = new WebpageMapper(appConfig);
         debugUtils = new DebugUtils(appConfig);
+        this.indexingService = indexingService;
     }
 
-    public WebsiteMapper(WebPage webpage, AppConfig appConfig) {
+    public WebsiteMapper(WebPage webpage, AppConfig appConfig, IndexingService indexingService) {
         this.webpage = webpage;
         this.appConfig = appConfig;
         webpageMapper = new WebpageMapper(appConfig);
         debugUtils = new DebugUtils(appConfig);
+        this.indexingService = indexingService;
     }
 
-    //TODO: resolve java.net.SocketTimeoutException: Read timed out exceptions.
-    //TODO: resolve java.net.ConnectException: Connection timed out: getsockopt - possible exception, prolly website thinks I am DDoS attacking them
-    //TODO: handle cases when Connection.Response from WebpageMapper is null, if any
     @Override
     protected WebPage compute() {
         Map<String, WebsiteMapper> taskList = new HashMap<>();
@@ -61,7 +64,7 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
                 if (!webpage.hasLink(url)) {
                     if (url.contains(originalLink) && !taskList.containsKey(url) && !webpage.equalsLeniently(webpage.getUrl(), url)) {
                         webpage.addUrlToList(url);
-                        WebsiteMapper task = new WebsiteMapper(webpage.getUrlList().get(url), appConfig);
+                        WebsiteMapper task = new WebsiteMapper(webpage.getUrlList().get(url), appConfig, indexingService);
                         task.fork();
                         taskList.put(url, task);
                         debugUtils.println("DEBUG (WebsiteMapper): [" + this + "]: \n  to [" + webpage + "] " + webpage.getUrl() + "\n  added [" + webpage.getUrlList().get(url) + "] " + url);
@@ -69,6 +72,8 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
                 }
             }
         } catch (NullPointerException e) {
+        } catch (SocketTimeoutException | ConnectException e) {
+            indexingService.cancelWebsiteMapperTask(originalLink, e.getClass());
         } catch (Exception e) {
             e.printStackTrace();
 
@@ -80,6 +85,10 @@ public class WebsiteMapper extends RecursiveTask<WebPage> {
         }
 
         return webpage;
+    }
+
+    public WebPage getOriginalWebpage() {
+        return webpage.getOriginalWebPage();
     }
 
     private String parseHref(String url, String originalLink) {

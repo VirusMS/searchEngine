@@ -10,6 +10,8 @@ import java.util.stream.Collectors;
 
 public class LemmaMapper {
 
+    private static final List<String> BAD_MORPHS = List.of("ПРЕДЛ", "СОЮЗ", "МЕЖД");
+
     public static HashMap<String, Integer> getLemmasAndCountsFromText(String text) {
         HashMap<String, Integer> lemmas = new HashMap<>();
 
@@ -18,15 +20,13 @@ public class LemmaMapper {
             List<String> words = splitTextToWords(text);
 
             for (String word : words) {
-                //TODO: try to deal with cases of words' base forms such as "какой-ть"
-                //TODO: java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 500163 @ getNormalForms
                 List<String> wordBaseForms = luceneMorph.getNormalForms(word);
                 List<String> morphInfo = luceneMorph.getMorphInfo(word);
 
-                for (int i = 0; i < wordBaseForms.size(); i++) { //both morphs and base forms are similar in position as well as size
+                for (int i = 0; i < wordBaseForms.size(); i++) {
                     String morph = morphInfo.get(i);
                     String baseForm = wordBaseForms.get(i);
-                    if (!morph.contains("ПРЕДЛ") && !morph.contains("СОЮЗ") && !morph.contains("МЕЖД")) {
+                    if (!morphContainsBadDefinitions(morph)) {
                         if (lemmas.containsKey(baseForm)) {
                             lemmas.put(baseForm, lemmas.get(baseForm) + 1);
                         } else {
@@ -50,15 +50,13 @@ public class LemmaMapper {
             List<String> words = splitTextToWords(text);
 
             for (String word : words) {
-                //TODO: try to deal with cases of words' base forms such as "какой-ть"
-                //TODO: java.lang.ArrayIndexOutOfBoundsException: Index -1 out of bounds for length 500163 @ getNormalForms
                 List<String> wordBaseForms = luceneMorph.getNormalForms(word);
                 List<String> morphInfo = luceneMorph.getMorphInfo(word);
 
-                for (int i = 0; i < wordBaseForms.size(); i++) { //both morphs and base forms are similar in position as well as size
+                for (int i = 0; i < wordBaseForms.size(); i++) {
                     String morph = morphInfo.get(i);
                     String baseForm = wordBaseForms.get(i);
-                    if (!morph.contains("ПРЕДЛ") && !morph.contains("СОЮЗ") && !morph.contains("МЕЖД")) {
+                    if (!morphContainsBadDefinitions(morph)) {
                         if (lemmas.contains(baseForm)) {
                             result.add(word);
                             break;
@@ -77,6 +75,10 @@ public class LemmaMapper {
         return new ArrayList<>(getLemmasAndCountsFromText(text).keySet());
     }
 
+    private static boolean morphContainsBadDefinitions(String morph) {
+        return BAD_MORPHS.stream().anyMatch(morph::contains);
+    }
+
     private static List<String> splitTextToWords(String text) {
         List<String> result = new ArrayList<>();
 
@@ -88,7 +90,7 @@ public class LemmaMapper {
         while (text.contains(" ")) {
 
             String toAdd = text.substring(0, text.indexOf(" "));
-            if (!toAdd.equals("") && !toAdd.equals("-") && !toAdd.equals("--")) { // Some words consist of Russian and English counterparts.
+            if (!toAdd.equals("") && !toAdd.equals("-") && !toAdd.equals("--")) {
 
                 if (toAdd.charAt(0) == '-') {
                     toAdd = toAdd.substring(1);

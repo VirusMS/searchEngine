@@ -19,6 +19,8 @@ import searchengine.repository.SiteRepository;
 import searchengine.utils.DebugUtils;
 import searchengine.utils.SqlUtils;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.CancellationException;
@@ -55,7 +57,7 @@ public class IndexingService {
             Optional<Site> siteInDb = siteRepository.findByUrl(entry.getKey());
             int siteId = siteInDb.isPresent() ? siteInDb.get().getId() : -1;
 
-            String sql = "UPDATE site SET status = 'FAILED', status_time = '"
+            String sql = "UPDATE site SET status = '"+ SiteStatus.FAILED + "', status_time = '"
                     + dateFormat.format(System.currentTimeMillis()) + "', last_error = 'Индексация остановлена пользователем' "
                     + "WHERE id = " + siteId;
             jdbcTemplate.execute(sql);
@@ -90,6 +92,30 @@ public class IndexingService {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public void cancelWebsiteMapperTask(String url, Class clazz) {
+        WebsiteMapper toCancel = websiteMapperTaskList.get(url);
+        if (toCancel == null) {
+            debugUtils.println("DEBUG (IndexingService.cancelWebsiteMapperTask): toCancel = null, this is not expected behaviour. Need to investigate. URL: " + url);
+            return;
+        }
+        websiteMapperTaskList.remove(url);
+
+        WebPage page = toCancel.getOriginalWebpage();
+        toCancel.cancel(true);
+        String errorMessage;
+        if (clazz == SocketTimeoutException.class) {
+            errorMessage = "Таймаут чтения одной из страниц сайта. Невозможно получить данные с сайта для индексации";
+        } else if (clazz == ConnectException.class) {
+            errorMessage = "Проблема при соединении с сайтом. Возможно, сайт заблокировал запросы поискового движка.";
+        } else {
+            errorMessage = "Ошибка при взаимодействии с сайтом";
+        }
+
+        String sql = "UPDATE site SET status = '" + SiteStatus.FAILED + "', status_time = '"
+                + dateFormat.format(System.currentTimeMillis()) + "', last_error = '" + errorMessage + "' WHERE id = " + page.getPageId();
+        jdbcTemplate.execute(sql);
     }
 
     private Site getSiteFromDb(SiteShort website) {
@@ -228,7 +254,7 @@ public class IndexingService {
             for (Site site : siteRepository.findAll()) {
                 if (site.getUrl().equals(url)) {
                     Integer siteId = site.getId();
-                    WebsiteMapper task = new WebsiteMapper(url, siteId, appConfig);
+                    WebsiteMapper task = new WebsiteMapper(url, siteId, appConfig, this);
                     try {
                         websiteMapperTaskList.put(url, task);
                         taskPool.invoke(task);
@@ -242,15 +268,14 @@ public class IndexingService {
             WebPage page = entry.getValue().join();
             createIndexedPagesAndLemmasEntries(page, entry.getKey());
 
-            String sql = "UPDATE site SET status = 'INDEXED', status_time = '"
+            String sql = "UPDATE site SET status = '" + SiteStatus.INDEXED + "', status_time = '"
                     + dateFormat.format(System.currentTimeMillis()) + "' WHERE id = " + page.getPageId();
             jdbcTemplate.execute(sql);
         }
-        //6. если произошла ошибка и обход завершить не удалось, изменять статус на FAILED и вносить в поле last_error понятную информацию о произошедшей ошибке.
         debugUtils.println("DEBUG (indexPages): Indexing done!");
     }
 
-    private void buildAndExecuteCleanupQueries() {      //TODO: find out if you need to use TRUNCATE everywhere. Waiting for the curator's answer
+    private void buildAndExecuteCleanupQueries() {
 
         List<SiteShort> toRemove = appConfig.getSites();
         int siteCount = toRemove.size();
@@ -286,7 +311,7 @@ public class IndexingService {
             }
         }
 
-        if (!pageAndLemmaSql.isEmpty()) { //Both pageSql and siteSql will be empty if none were found, doesn't matter which 1 to check on
+        if (!pageAndLemmaSql.isEmpty()) {
             if (pageAndLemmaSql.substring(pageAndLemmaSql.length() - 2, pageAndLemmaSql.length()).equals(", ")) {
                 pageAndLemmaSql = new StringBuilder(pageAndLemmaSql.substring(0, pageAndLemmaSql.length() - 2)).append(")");
                 siteSql = new StringBuilder(siteSql.substring(0, siteSql.length() - 4)).append(")");
@@ -326,7 +351,7 @@ public class IndexingService {
         for (Map.Entry<String, WebPage> webpageEntry : pageList.entrySet()) {
 
             WebPage webpage = webpageEntry.getValue();
-            if (!webpage.isDefinedCorrectly()) {    //This is a failsafe for now. Reasonably, we need to parse errors that cause this
+            if (!webpage.isDefinedCorrectly()) {    //This is a failsafe, this should not be an issue at all
                 debugUtils.println("DEBUG (createIndexedPagesAndLemmasEntries): incorrect page is below\n  " + webpage);
                 continue;
             }
@@ -396,7 +421,7 @@ public class IndexingService {
         Map<String, WebPage> pageList = startPage.getFlatUrlList();
         Integer siteId = startPage.getPageId();
 
-        Site site = siteRepository.findById(siteId).orElse(null);//Site should not be null here, may need extra check.
+        Site site = siteRepository.findById(siteId).orElse(null);
         List<Lemma> lemmas = lemmaRepository.findAllBySite(site);
         List<Page> pages = pageRepository.findAllBySite(site);
 

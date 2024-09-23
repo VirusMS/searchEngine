@@ -29,7 +29,6 @@ public class WebpageMapper {
         } catch (InterruptedException e) {
         } catch (HttpStatusException e) {
             e.printStackTrace();
-        // If we catch HttpStatusException, we need to additionally parse error 404?
         } catch (Exception e) {
             e.printStackTrace();
         }
