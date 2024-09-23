@@ -108,6 +108,9 @@ public class ApiService {
         }
 
         response.sortResultsByDescendingRelevancy();
+        response.setResultsByLimitAndOffset(limit, offset);
+
+        System.out.println("COUNT = " + response.getCount());
         return response;
     }
 

@@ -39,4 +39,14 @@ public class SearchResponse {
         data = items;
     }
 
+    public void setResultsByLimitAndOffset(int limit, int offset) {
+        List<SearchItem> newItems = new ArrayList<>();
+
+        for (int i = offset; i < offset + limit && i < data.size(); i++) {
+            newItems.add(data.get(i));
+        }
+
+        data = newItems;
+    }
+
 }

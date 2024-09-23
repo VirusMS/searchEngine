@@ -38,6 +38,8 @@ public class IndexingTask implements Runnable {
             }
 
             target.run();
+            isRunning.set(false);
+
         }
     }
 }

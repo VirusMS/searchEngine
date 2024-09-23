@@ -272,6 +272,7 @@ public class IndexingService {
                     + dateFormat.format(System.currentTimeMillis()) + "' WHERE id = " + page.getPageId();
             jdbcTemplate.execute(sql);
         }
+
         debugUtils.println("DEBUG (indexPages): Indexing done!");
     }
 

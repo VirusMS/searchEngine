@@ -9,8 +9,6 @@ application:
     user-agent: VMSSearchBot
     referrer: http://google.com
   sites:
-    - url: https://www.battlestategames.com
-      name: Battlestate Games official site
     - url: http://www.playback.ru
       name: плэйбэк ру
 spring:
